@@ -1,0 +1,17 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="icodeGradient" x1="32" y1="28" x2="224" y2="228" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2CD5A4"/>
+      <stop offset="1" stop-color="#1F5EDB"/>
+    </linearGradient>
+  </defs>
+  <rect x="20" y="20" width="216" height="216" rx="52" fill="#F7FBFF"/>
+  <path d="M68 68H116V84H84V116H68V68Z" fill="url(#icodeGradient)"/>
+  <path d="M140 68H188V116H172V84H140V68Z" fill="url(#icodeGradient)"/>
+  <path d="M68 140H84V172H116V188H68V140Z" fill="url(#icodeGradient)"/>
+  <path d="M172 140H188V188H140V172H172V140Z" fill="url(#icodeGradient)"/>
+  <rect x="112" y="78" width="32" height="110" rx="16" fill="#15284F"/>
+  <rect x="112" y="54" width="32" height="18" rx="9" fill="#15284F"/>
+  <rect x="102" y="122" width="52" height="52" rx="18" fill="url(#icodeGradient)"/>
+  <path d="M120 148L129 157L141 140" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

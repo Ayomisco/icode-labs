@@ -4,7 +4,6 @@ import {
   AtSign,
   CalendarDays,
   FileText,
-  Globe,
   Image as ImageIcon,
   Link as LinkIcon,
   MessageCircle,
@@ -518,7 +517,7 @@ export default function Home() {
       <header className="topbar">
         <div className="brand-wrap">
           <div className="brand-mark" aria-hidden>
-            <Globe size={18} />
+            <NextImage src="/icode-logo.svg" alt="icode logo" width={34} height={34} priority />
           </div>
           <div className="brand-text">icode</div>
         </div>

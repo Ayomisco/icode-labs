@@ -10,6 +10,11 @@ export const metadata: Metadata = {
   title: "icode | Smart QR Platform",
   description:
     "Generate production-ready static QR codes for links, contact cards, events, Wi-Fi, social media, apps, and more.",
+  icons: {
+    icon: "/icode-logo.svg",
+    shortcut: "/icode-logo.svg",
+    apple: "/icode-logo.svg",
+  },
 };
 
 export default function RootLayout({

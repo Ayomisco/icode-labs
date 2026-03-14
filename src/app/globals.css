@@ -81,10 +81,9 @@ a {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #2cd5a4, #06916b);
   display: grid;
   place-items: center;
-  color: #ffffff;
+  overflow: hidden;
 }
 
 .brand-text {
