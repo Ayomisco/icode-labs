@@ -512,6 +512,8 @@ export default function Home() {
                   ? "preview-shell border-squircle"
                   : "preview-shell";
 
+  const isStepComplete = Boolean(payloadDetails.payload) && !payloadDetails.error;
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -716,7 +718,7 @@ export default function Home() {
             Download QR Code
           </h2>
 
-          <div className={`${frameClass} ${borderClass}`} style={{ borderColor }}>
+          <div className={`${frameClass} ${borderClass} ${!isStepComplete ? "preview-inactive" : ""}`} style={{ borderColor }}>
             {isGenerating && <div className="placeholder">Generating...</div>}
             {!isGenerating && qrDataUrl && (
               <div className={shapeClass}>
@@ -735,11 +737,19 @@ export default function Home() {
               </div>
             )}
             {!isGenerating && !qrDataUrl && <div className="placeholder">Your QR preview appears here.</div>}
+            {!isStepComplete && (
+              <div className="inactive-overlay">Complete Step 1 to activate preview and download</div>
+            )}
           </div>
 
           {error && <p className="error-text">{error}</p>}
 
-          <button type="button" className="download-btn" onClick={downloadQr} disabled={!qrDataUrl}>
+          <button
+            type="button"
+            className="download-btn"
+            onClick={downloadQr}
+            disabled={!qrDataUrl || !isStepComplete || isGenerating}
+          >
             Download QR Code
           </button>
 

@@ -556,9 +556,30 @@ input[type="color"] {
   border-radius: 12px;
   background: #ffffff;
   min-height: 320px;
+  position: relative;
   display: grid;
   place-items: center;
   padding: 14px;
+}
+
+.preview-inactive .qr-preview-inner,
+.preview-inactive .placeholder {
+  filter: blur(2.5px) grayscale(0.35);
+  opacity: 0.42;
+}
+
+.inactive-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: #2a3e65;
+  font-size: 0.94rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 22px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.25), rgba(248, 251, 255, 0.9));
 }
 
 .preview-shell {
@@ -674,6 +695,52 @@ input[type="color"] {
 
 .logo-overlay.plus {
   clip-path: polygon(35% 0, 65% 0, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0 65%, 0 35%, 35% 35%);
+}
+
+.placeholder {
+  color: var(--ink-500);
+  font-weight: 600;
+}
+
+.error-text {
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.download-btn {
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #1ec78f, #0ea57a);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 1.13rem;
+  letter-spacing: 0.01em;
+  padding: 18px 20px;
+  min-height: 64px;
+  width: 100%;
+  box-shadow: 0 16px 28px rgba(14, 165, 122, 0.3);
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+  cursor: pointer;
+}
+
+.download-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 34px rgba(14, 165, 122, 0.34);
+  filter: saturate(1.08);
+}
+
+.download-btn:disabled {
+  background: linear-gradient(135deg, #cad2e2, #bcc6d8);
+  color: #edf2fa;
+  box-shadow: none;
+  transform: none;
+  filter: none;
+  cursor: not-allowed;
+}
+
+.forever-note {
+  color: var(--ink-500);
+  font-size: 0.9rem;
 }
 
 .center-glyph {
