@@ -100,7 +100,7 @@ const useCases: UseCase[] = [
 ];
 
 const defaultForm: FormState = {
-  link: "https://",
+  link: "",
   text: "",
   email: "",
   emailSubject: "",
@@ -118,11 +118,11 @@ const defaultForm: FormState = {
   wifiPassword: "",
   wifiEncryption: "WPA",
   wifiHidden: false,
-  pdf: "https://",
-  app: "https://",
-  images: "https://",
-  video: "https://",
-  social: "https://",
+  pdf: "",
+  app: "",
+  images: "",
+  video: "",
+  social: "",
   eventTitle: "",
   eventLocation: "",
   eventStart: "",
@@ -476,7 +476,8 @@ export default function Home() {
 
     const link = document.createElement("a");
     link.href = canvas.toDataURL("image/png");
-    link.download = `icode-${activeUseCase}.png`;
+    const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
+    link.download = `icode-${rand}.png`;
     link.click();
   };
 

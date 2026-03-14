@@ -564,8 +564,10 @@ input[type="color"] {
 
 .preview-inactive .qr-preview-inner,
 .preview-inactive .placeholder {
-  filter: blur(2.5px) grayscale(0.35);
-  opacity: 0.42;
+  filter: blur(10px) grayscale(0.5);
+  opacity: 0.18;
+  pointer-events: none;
+  user-select: none;
 }
 
 .inactive-overlay {
@@ -736,6 +738,7 @@ input[type="color"] {
   transform: none;
   filter: none;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 .forever-note {
