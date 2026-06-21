@@ -17,6 +17,7 @@ import {
   Wifi,
 } from "lucide-react";
 import NextImage from "next/image";
+import Link from "next/link";
 import { ChangeEvent, ElementType, useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 
@@ -368,8 +369,72 @@ export default function Home() {
   const [transparentBg, setTransparentBg] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Auth & save state
+  const [authUser, setAuthUser] = useState<{ email: string; userId: string } | null | undefined>(undefined);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [savedInfo, setSavedInfo] = useState<{
+    trackingId: string;
+    isDynamic: boolean;
+    manageUrl: string;
+    redirectUrl: string | null;
+  } | null>(null);
+
   const active = useMemo(() => useCases.find((item) => item.id === activeUseCase) ?? useCases[0], [activeUseCase]);
   const payloadDetails = useMemo(() => buildPayload(activeUseCase, form), [activeUseCase, form]);
+
+  // Check auth on mount
+  useEffect(() => {
+    fetch("/api/auth/me", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setAuthUser(data ?? null))
+      .catch(() => setAuthUser(null));
+  }, []);
+
+  const saveQrCode = async () => {
+    if (!qrDataUrl || !payloadDetails.payload) return;
+    setSaveStatus("saving");
+    try {
+      const res = await fetch("/api/qr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          name: `${active.title} QR`,
+          useCase: activeUseCase,
+          payload: payloadDetails.payload,
+          formData: form,
+          designSettings: {
+            frameStyle, shapeStyle, borderStyle, centerStyle,
+            size, margin, ecLevel, darkColor, lightColor,
+            borderColor, centerColor, gradientEnabled, gradientColor,
+            transparentBg,
+          },
+        }),
+      });
+
+      if (!res.ok) throw new Error("Save failed");
+
+      const data = await res.json();
+      setSavedInfo(data);
+      setSaveStatus("saved");
+
+      // For dynamic QRs: regenerate the QR with the redirect URL so the download contains the right link
+      if (data.isDynamic && data.redirectUrl) {
+        const base = await QRCode.toDataURL(data.redirectUrl, {
+          width: size,
+          margin,
+          errorCorrectionLevel: ecLevel,
+          color: { dark: darkColor, light: transparentBg ? "#0000" : lightColor },
+        });
+        const final = gradientEnabled
+          ? await applyGradient(base, size, darkColor, gradientColor, transparentBg)
+          : base;
+        setQrDataUrl(final);
+      }
+    } catch {
+      setSaveStatus("error");
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -525,10 +590,27 @@ export default function Home() {
           <div className="brand-text">icode</div>
         </div>
         <div className="topbar-actions">
+          <Link href="/compress" style={{ color: "var(--ink-700)", fontWeight: 600, fontSize: "0.93rem" }}>
+            Compressor
+          </Link>
           <div className="forever-pill">Static QR Forever</div>
           <button type="button" className="action-btn" onClick={clearAll}>
             Reset Builder
           </button>
+          {authUser ? (
+            <Link href="/dashboard" className="action-btn" style={{ textDecoration: "none" }}>
+              My Dashboard
+            </Link>
+          ) : (
+            <>
+              <Link href="/auth/login" className="action-btn" style={{ textDecoration: "none" }}>
+                Sign in
+              </Link>
+              <Link href="/auth/register" className="action-btn" style={{ textDecoration: "none", background: "linear-gradient(135deg,#2563eb,#0ea5e9)", color: "#fff", border: "none" }}>
+                Get started free
+              </Link>
+            </>
+          )}
         </div>
       </header>
 
@@ -754,9 +836,211 @@ export default function Home() {
             Download QR Code
           </button>
 
+          <button
+            type="button"
+            className="download-btn"
+            onClick={saveQrCode}
+            disabled={!qrDataUrl || !isStepComplete || isGenerating || saveStatus === "saving"}
+            style={{ background: "linear-gradient(135deg,#059669,#10b981)", marginTop: "8px" }}
+          >
+            {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : "Save & Get Tracking Link"}
+          </button>
+
+          {saveStatus === "error" && (
+            <p style={{ color: "#dc2626", fontSize: "13px", margin: "4px 0 0" }}>
+              Save failed. Please try again.
+            </p>
+          )}
+
+          {savedInfo && saveStatus === "saved" && (
+            <div style={{ background: "linear-gradient(135deg,#f0fdf4,#ecfdf5)", border: "1.5px solid #a7f3d0", borderRadius: "14px", padding: "16px", marginTop: "4px" }}>
+              <p style={{ fontSize: "13px", fontWeight: 700, color: "#065f46", margin: "0 0 8px" }}>
+                {savedInfo.isDynamic ? "Dynamic QR saved — redirect active!" : "QR code saved!"}
+              </p>
+              <p style={{ fontSize: "12px", color: "#374151", margin: "0 0 4px" }}>
+                Tracking ID: <code style={{ fontFamily: "monospace", background: "#d1fae5", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>{savedInfo.trackingId}</code>
+              </p>
+              {savedInfo.isDynamic && (
+                <p style={{ fontSize: "12px", color: "#6b7280", margin: "4px 0 0" }}>
+                  QR now encodes your redirect link. Change the destination anytime — no reprint needed.
+                </p>
+              )}
+              <div style={{ display: "flex", gap: "8px", marginTop: "12px", flexWrap: "wrap" }}>
+                <a
+                  href={savedInfo.manageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: "12px", fontWeight: 700, color: "#059669", textDecoration: "none", background: "#fff", border: "1.5px solid #a7f3d0", borderRadius: "8px", padding: "6px 12px" }}
+                >
+                  Manage this QR →
+                </a>
+                {authUser ? (
+                  <a
+                    href="/dashboard"
+                    style={{ fontSize: "12px", fontWeight: 700, color: "#2563eb", textDecoration: "none", background: "#fff", border: "1.5px solid #bfdbfe", borderRadius: "8px", padding: "6px 12px" }}
+                  >
+                    View Dashboard
+                  </a>
+                ) : (
+                  <a
+                    href="/auth/register"
+                    style={{ fontSize: "12px", fontWeight: 700, color: "#2563eb", textDecoration: "none", background: "#fff", border: "1.5px solid #bfdbfe", borderRadius: "8px", padding: "6px 12px" }}
+                  >
+                    Create account to manage all QRs
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
           <p className="forever-note">Static QR codes generated by icode never expire. They are fully yours and keep working forever.</p>
         </aside>
       </main>
+
+      {/* ── Marketing section — only shown to guests ── */}
+      {authUser === null && (
+        <section className="mkt-section" aria-label="Why create an account">
+          {/* Ambient decorations */}
+          <div className="mkt-orb mkt-orb-1" aria-hidden />
+          <div className="mkt-orb mkt-orb-2" aria-hidden />
+          <div className="mkt-orb mkt-orb-3" aria-hidden />
+          <div className="mkt-scanlines"     aria-hidden />
+          <div className="mkt-scanner"       aria-hidden />
+          <div className="mkt-corner mkt-corner-tl" aria-hidden />
+          <div className="mkt-corner mkt-corner-tr" aria-hidden />
+          <div className="mkt-corner mkt-corner-bl" aria-hidden />
+          <div className="mkt-corner mkt-corner-br" aria-hidden />
+
+          {/* Story */}
+          <div className="mkt-story">
+            <div className="mkt-eyebrow">
+              <span className="mkt-eyebrow-dot" />
+              Why icode accounts exist
+            </div>
+
+            <h2 className="mkt-headline">
+              7,000 QR codes.<br />
+              One <span className="mkt-headline-accent">broken link.</span><br />
+              One update fixed all.
+            </h2>
+
+            <div className="mkt-pullquote">
+              <p>
+                "We printed over 7,000 copies last week, then noticed the link wasn't working.
+                We had to change the URL — without reprinting a single sheet."
+              </p>
+              <cite>— icode customer story</cite>
+            </div>
+
+            <p className="mkt-sub">
+              With an icode account, every QR code you print has a live destination you can
+              change anytime. Your printed materials stay permanent. Your links stay flexible.
+            </p>
+          </div>
+
+          {/* Feature cards */}
+          <div className="mkt-features">
+            <div className="mkt-card">
+              <div className="mkt-card-icon mkt-card-icon-green">🔄</div>
+              <h3>Change destination. Keep the QR.</h3>
+              <p>
+                Printed thousands of copies and the link broke? Log in, update the destination URL,
+                and every existing QR instantly points to the new address — no reprint, ever.
+              </p>
+              <span className="mkt-card-tag mkt-card-tag-green">Dynamic Redirect</span>
+            </div>
+
+            <div className="mkt-card">
+              <div className="mkt-card-icon mkt-card-icon-blue">📡</div>
+              <h3>See every scan in real time.</h3>
+              <p>
+                Know exactly how many times each QR was scanned. Track performance across
+                campaigns, events, and print runs — all from one clean dashboard.
+              </p>
+              <span className="mkt-card-tag mkt-card-tag-blue">Scan Analytics</span>
+            </div>
+
+            <div className="mkt-card">
+              <div className="mkt-card-icon mkt-card-icon-violet">⚡</div>
+              <h3>All your codes. One place.</h3>
+              <p>
+                Manage every QR you've ever created — rename them, pause them, hand them off.
+                Create as many as you need, organized and ready whenever you are.
+              </p>
+              <span className="mkt-card-tag mkt-card-tag-violet">QR Dashboard</span>
+            </div>
+          </div>
+
+          {/* Social proof numbers */}
+          <div className="mkt-proof">
+            <div className="mkt-proof-item">
+              <span className="mkt-proof-number">∞</span>
+              <span className="mkt-proof-label">QR codes, free</span>
+            </div>
+            <div className="mkt-proof-divider" />
+            <div className="mkt-proof-item">
+              <span className="mkt-proof-number">0s</span>
+              <span className="mkt-proof-label">Redirect delay</span>
+            </div>
+            <div className="mkt-proof-divider" />
+            <div className="mkt-proof-item">
+              <span className="mkt-proof-number">15+</span>
+              <span className="mkt-proof-label">QR types</span>
+            </div>
+            <div className="mkt-proof-divider" />
+            <div className="mkt-proof-item">
+              <span className="mkt-proof-number">0₦</span>
+              <span className="mkt-proof-label">Forever free</span>
+            </div>
+          </div>
+
+          {/* CTA */}
+          <div className="mkt-cta">
+            <div className="mkt-cta-ring">
+              <p className="mkt-cta-title">Start managing your QR codes.</p>
+              <p className="mkt-cta-sub">
+                Free forever. No credit card. Takes 20 seconds.
+              </p>
+              <div className="mkt-cta-btns">
+                <Link href="/auth/register" className="mkt-btn-primary">
+                  Create free account →
+                </Link>
+                <Link href="/auth/login" className="mkt-btn-secondary">
+                  Sign in
+                </Link>
+              </div>
+              <div className="mkt-trust">
+                <span>No credit card</span>
+                <span className="mkt-trust-dot" />
+                <span>No expiry</span>
+                <span className="mkt-trust-dot" />
+                <span>Cancel anytime</span>
+                <span className="mkt-trust-dot" />
+                <span>QR codes are yours forever</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mkt-footer">
+            <span>© {new Date().getFullYear()} icode</span>
+            <span>·</span>
+            <Link href="/manage">Find my QR</Link>
+            <span>·</span>
+            <Link href="/auth/register">Create account</Link>
+            <span>·</span>
+            <Link href="/auth/login">Sign in</Link>
+          </div>
+        </section>
+      )}
+
+      {/* Logged-in footer */}
+      {authUser && (
+        <div style={{ textAlign: "center", padding: "20px 0 8px", color: "var(--ink-500)", fontSize: "0.85rem" }}>
+          <Link href="/dashboard" style={{ color: "var(--blue)", fontWeight: 700 }}>
+            View your QR dashboard →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
