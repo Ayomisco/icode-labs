@@ -119,21 +119,18 @@ async function compressVideo(
   const ffmpeg = new FFmpeg();
   ffmpeg.on("progress", ({ progress }) => onProgress(Math.round(Math.min(1, Math.max(0, progress)) * 100)));
 
-  // Multi-threaded core: uses all CPU cores via SharedArrayBuffer — several times
-  // faster than the single-threaded build. Requires COOP/COEP headers (set on /compress).
-  const threaded = typeof SharedArrayBuffer !== "undefined";
-  const base = threaded
-    ? "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/umd"
-    : "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+  // Single-threaded core only — the multi-threaded "-mt" build's worker
+  // protocol is version-sensitive against the @ffmpeg/ffmpeg wrapper version
+  // and throws "function signature mismatch" when they drift apart. This is
+  // the fallback path (WebCodecs handles the common fast case), so
+  // reliability matters more here than the extra speed from threading.
+  const base = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd";
 
-  onStatus(threaded ? "Loading FFmpeg engine (multi-threaded)…" : "Loading FFmpeg engine…");
+  onStatus("Loading FFmpeg engine…");
 
   await ffmpeg.load({
     coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
     wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
-    ...(threaded
-      ? { workerURL: await toBlobURL(`${base}/ffmpeg-core.worker.js`, "text/javascript") }
-      : {}),
   });
 
   onStatus("");

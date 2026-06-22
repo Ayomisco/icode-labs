@@ -162,6 +162,10 @@ export async function compressVideoWebCodecs(
       ? { codec: "aac", numberOfChannels: audioTrack.audio!.channel_count, sampleRate: audioTrack.audio!.sample_rate }
       : undefined,
     fastStart: "in-memory",
+    // Source timestamps aren't guaranteed to start at 0 (e.g. due to an edit
+    // list or encoder delay) — offset both tracks by the earliest of the two
+    // so playback stays in sync instead of erroring on a non-zero first chunk.
+    firstTimestampBehavior: audioTrack ? "cross-track-offset" : "offset",
   });
 
   let encoderError: Error | null = null;
@@ -196,8 +200,11 @@ export async function compressVideoWebCodecs(
       })
     );
 
-    if (decoder.decodeQueueSize > 8) {
-      await decoder.flush().catch(() => {});
+    // Backpressure: wait for the decode queue to drain a bit before continuing,
+    // without calling flush() (which would force the next chunk to be a
+    // keyframe and break mid-GOP decoding).
+    while (decoder.decodeQueueSize > 16) {
+      await new Promise((r) => setTimeout(r, 0));
     }
     if (i % 5 === 0) onProgress(Math.round((i / total) * 85));
   }
