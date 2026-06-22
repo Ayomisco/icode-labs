@@ -17,6 +17,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import imageCompression from "browser-image-compression";
+import { supportsWebCodecsFastPath, compressVideoWebCodecs } from "./webcodecs-video";
 
 type FileTab = "images" | "videos" | "documents" | "pdf";
 type CompressionState = "idle" | "compressing" | "done" | "error";
@@ -82,6 +83,28 @@ async function compressImage(file: File, quality: number): Promise<Blob> {
     alwaysKeepResolution: true,
   };
   return imageCompression(file, options);
+}
+
+// Tries the hardware-accelerated WebCodecs path first (fast, MP4/H.264 only);
+// falls back to FFmpeg.wasm for anything it can't handle or that throws.
+async function compressVideoSmart(
+  file: File,
+  quality: number,
+  onProgress: (pct: number) => void,
+  onStatus: (msg: string) => void
+): Promise<Blob> {
+  if (supportsWebCodecsFastPath(file)) {
+    try {
+      onStatus("Compressing with hardware acceleration…");
+      const blob = await compressVideoWebCodecs(file, quality, onProgress);
+      onStatus("");
+      return blob;
+    } catch (e) {
+      console.warn("WebCodecs fast path failed, falling back to FFmpeg:", e);
+      onProgress(0);
+    }
+  }
+  return compressVideo(file, quality, onProgress, onStatus);
 }
 
 async function compressVideo(
@@ -215,7 +238,7 @@ export default function CompressPage() {
           blob = await compressImage(file, quality);
           setProgress(100);
         } else if (tab === "videos") {
-          blob = await compressVideo(
+          blob = await compressVideoSmart(
             file,
             quality,
             (pct) => setProgress(pct),
