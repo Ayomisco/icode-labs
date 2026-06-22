@@ -40,9 +40,8 @@ async function demux(file: File) {
   const videoSamples: Sample[] = [];
   const audioSamples: Sample[] = [];
 
-  const info: any = await new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     mp4box.onError = (e: string) => reject(new Error(e));
-    mp4box.onReady = (i: any) => resolve(i);
 
     mp4box.onSamples = (id: number, _user: unknown, samples: any[]) => {
       const target = videoTrack && id === videoTrack.id ? videoSamples : audioTrack && id === audioTrack.id ? audioSamples : null;
@@ -52,44 +51,43 @@ async function demux(file: File) {
       }
     };
 
-    const buf = file.arrayBuffer();
-    buf.then((ab) => {
+    // Must configure extraction + call start() synchronously inside onReady,
+    // before the data already buffered by appendBuffer/flush gets discarded.
+    mp4box.onReady = (info: any) => {
+      const vt = info.tracks.find((t: any) => t.video);
+      const at = info.tracks.find((t: any) => t.audio);
+
+      if (!vt) { reject(new Error("No video track found in source file.")); return; }
+
+      videoTrack = {
+        id: vt.id,
+        codec: vt.codec,
+        timescale: vt.timescale,
+        video: { width: vt.video.width, height: vt.video.height },
+      };
+      if (at) {
+        audioTrack = {
+          id: at.id,
+          codec: at.codec,
+          timescale: at.timescale,
+          audio: { sample_rate: at.audio.sample_rate, channel_count: at.audio.channel_count },
+        };
+      }
+
+      mp4box.setExtractionOptions(vt.id, null, { nbSamples: 100000 });
+      if (at) mp4box.setExtractionOptions(at.id, null, { nbSamples: 100000 });
+      mp4box.start();
+      resolve();
+    };
+
+    file.arrayBuffer().then((ab) => {
       (ab as any).fileStart = 0;
       mp4box.appendBuffer(ab as any);
       mp4box.flush();
-    });
+    }, reject);
   });
 
-  const vt = info.tracks.find((t: any) => t.video);
-  const at = info.tracks.find((t: any) => t.audio);
-
-  if (!vt) throw new Error("No video track found in source file.");
-
-  videoTrack = {
-    id: vt.id,
-    codec: vt.codec,
-    timescale: vt.timescale,
-    video: { width: vt.video.width, height: vt.video.height },
-  };
-  if (at) {
-    audioTrack = {
-      id: at.id,
-      codec: at.codec,
-      timescale: at.timescale,
-      audio: { sample_rate: at.audio.sample_rate, channel_count: at.audio.channel_count },
-    };
-  }
-
-  mp4box.setExtractionOptions(videoTrack.id, null, { nbSamples: 100000 });
-  if (audioTrack) mp4box.setExtractionOptions(audioTrack.id, null, { nbSamples: 100000 });
-  mp4box.start();
-  mp4box.flush();
-
-  // mp4box.js processes synchronously within these calls; give pending
-  // microtasks a chance to settle before reading results.
-  await new Promise((r) => setTimeout(r, 0));
-
-  if (videoSamples.length === 0) throw new Error("Failed to extract video samples.");
+  if (!videoTrack || videoSamples.length === 0) throw new Error("Failed to extract video samples.");
 
   return { mp4box, videoTrack, audioTrack, videoSamples, audioSamples };
 }
