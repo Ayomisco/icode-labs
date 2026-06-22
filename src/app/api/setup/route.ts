@@ -1,7 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import sql from "@/lib/db";
+import { getAdminSession } from "@/lib/auth";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  // Allow the request only if it carries the SETUP_SECRET header OR comes from an admin session
+  const setupSecret = process.env.SETUP_SECRET;
+  const headerSecret = request.headers.get("x-setup-secret");
+  const adminSession = await getAdminSession();
+
+  if (!adminSession && (!setupSecret || headerSecret !== setupSecret)) {
+    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  }
   try {
     await sql`
       CREATE TABLE IF NOT EXISTS users (
@@ -30,6 +39,20 @@ export async function POST() {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `;
+
+    // Add expiry columns if they don't already exist (safe to run on existing tables)
+    await sql`ALTER TABLE qr_codes ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ DEFAULT NULL`;
+    await sql`ALTER TABLE qr_codes ADD COLUMN IF NOT EXISTS max_scans INTEGER DEFAULT NULL`;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS scan_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tracking_id VARCHAR(16) NOT NULL,
+        scanned_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_scan_tracking ON scan_logs(tracking_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_scan_date ON scan_logs(scanned_at)`;
 
     await sql`CREATE INDEX IF NOT EXISTS idx_qr_tracking ON qr_codes(tracking_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_qr_user ON qr_codes(user_id)`;

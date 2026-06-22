@@ -1,10 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import NextImage from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
+
+function Sparkline({ data }: { data: number[] }) {
+  if (!data.length) return null;
+  const w = 120, h = 36, pad = 2;
+  const max = Math.max(...data, 1);
+  const pts = data.map((v, i) => {
+    const x = pad + (i / (data.length - 1 || 1)) * (w - pad * 2);
+    const y = h - pad - (v / max) * (h - pad * 2);
+    return `${x},${y}`;
+  });
+  return (
+    <svg width={w} height={h} style={{ display: "block" }}>
+      <polyline points={pts.join(" ")} fill="none" stroke="#2563eb" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 type QrCode = {
   id: string;
@@ -31,6 +47,7 @@ export default function DashboardPage() {
   const [saving, setSaving] = useState(false);
   const [qrImages, setQrImages] = useState<Record<string, string>>({});
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<Record<string, number[]>>({});
 
   useEffect(() => {
     // Check auth
@@ -61,6 +78,26 @@ export default function DashboardPage() {
         .catch(() => {});
     });
   }, [qrCodes, qrImages]);
+
+  // Fetch 14-day sparkline analytics for each QR
+  const fetchAnalytics = useCallback((trackingId: string) => {
+    if (analytics[trackingId]) return;
+    fetch(`/api/qr/${trackingId}/analytics?days=14`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.series) {
+          setAnalytics((prev) => ({
+            ...prev,
+            [trackingId]: (data.series as { count: number }[]).map((d) => d.count),
+          }));
+        }
+      })
+      .catch(() => {});
+  }, [analytics]);
+
+  useEffect(() => {
+    qrCodes.forEach((qr) => fetchAnalytics(qr.tracking_id));
+  }, [qrCodes, fetchAnalytics]);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -123,6 +160,7 @@ export default function DashboardPage() {
         <div style={s.headerRight}>
           {user && <span style={s.userEmail}>{user.email}</span>}
           <Link href="/" style={s.newBtn}>+ New QR</Link>
+          <Link href="/settings" style={s.logoutBtn}>Settings</Link>
           <button style={s.logoutBtn} onClick={handleLogout}>Sign out</button>
         </div>
       </header>
@@ -197,12 +235,19 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              <div style={s.stats}>
-                <span style={s.stat}>{qr.scan_count} scan{qr.scan_count !== 1 ? "s" : ""}</span>
-                <span style={s.stat}>{new Date(qr.created_at).toLocaleDateString()}</span>
-                <span style={{ ...s.stat, color: qr.is_active ? "#16a34a" : "#dc2626" }}>
-                  {qr.is_active ? "Active" : "Paused"}
-                </span>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                <div style={s.stats}>
+                  <span style={s.stat}>{qr.scan_count} scan{qr.scan_count !== 1 ? "s" : ""}</span>
+                  <span style={s.stat}>{new Date(qr.created_at).toLocaleDateString()}</span>
+                  <span style={{ ...s.stat, color: qr.is_active ? "#16a34a" : "#dc2626" }}>
+                    {qr.is_active ? "Active" : "Paused"}
+                  </span>
+                </div>
+                {analytics[qr.tracking_id] && (
+                  <div title="Scans — last 14 days">
+                    <Sparkline data={analytics[qr.tracking_id]} />
+                  </div>
+                )}
               </div>
 
               <div style={s.actions}>

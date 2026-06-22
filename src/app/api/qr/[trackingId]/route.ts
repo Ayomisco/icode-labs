@@ -53,10 +53,18 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (body.isActive !== undefined) {
     await sql`UPDATE qr_codes SET is_active = ${body.isActive}, updated_at = NOW() WHERE tracking_id = ${id}`;
   }
+  if (body.expiresAt !== undefined) {
+    const val = body.expiresAt ? new Date(body.expiresAt).toISOString() : null;
+    await sql`UPDATE qr_codes SET expires_at = ${val}, updated_at = NOW() WHERE tracking_id = ${id}`;
+  }
+  if (body.maxScans !== undefined) {
+    const val = body.maxScans ? Number(body.maxScans) : null;
+    await sql`UPDATE qr_codes SET max_scans = ${val}, updated_at = NOW() WHERE tracking_id = ${id}`;
+  }
 
   const updated = await sql`
     SELECT id, tracking_id, name, use_case, is_dynamic, destination_url,
-           payload, scan_count, is_active, updated_at
+           payload, scan_count, is_active, expires_at, max_scans, updated_at
     FROM qr_codes WHERE tracking_id = ${id}
   `;
 

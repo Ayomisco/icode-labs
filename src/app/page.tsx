@@ -546,6 +546,25 @@ export default function Home() {
     link.click();
   };
 
+  const downloadSvg = async () => {
+    if (!payloadDetails.payload) return;
+    const svgString = await QRCode.toString(payloadDetails.payload, {
+      type: "svg",
+      width: size,
+      margin,
+      errorCorrectionLevel: ecLevel,
+      color: { dark: darkColor, light: transparentBg ? "#0000" : lightColor },
+    });
+    const blob = new Blob([svgString], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
+    link.download = `icode-${rand}.svg`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const frameClass = frameStyle === "Rounded" ? "qr-preview-frame rounded" : frameStyle === "Ticket" ? "qr-preview-frame ticket" : "qr-preview-frame";
 
   const shapeClass =
@@ -827,14 +846,26 @@ export default function Home() {
 
           {error && <p className="error-text">{error}</p>}
 
-          <button
-            type="button"
-            className="download-btn"
-            onClick={downloadQr}
-            disabled={!qrDataUrl || !isStepComplete || isGenerating}
-          >
-            Download QR Code
-          </button>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              type="button"
+              className="download-btn"
+              onClick={downloadQr}
+              disabled={!qrDataUrl || !isStepComplete || isGenerating}
+              style={{ flex: 1 }}
+            >
+              Download PNG
+            </button>
+            <button
+              type="button"
+              className="download-btn"
+              onClick={downloadSvg}
+              disabled={!isStepComplete || isGenerating}
+              style={{ flex: 1, background: "var(--ink-700)" }}
+            >
+              Download SVG
+            </button>
+          </div>
 
           <button
             type="button"

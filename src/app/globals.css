@@ -1314,4 +1314,37 @@ input[type="color"] {
   .right-column h2 {
     font-size: 1.2rem;
   }
+
+  /* Hide full nav menu on small screens */
+  .menu {
+    display: none;
+  }
+
+  /* Stack topbar tightly */
+  .topbar {
+    flex-wrap: wrap;
+  }
+
+  .topbar-actions {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  /* Download buttons stack on narrow screens */
+  .download-btn {
+    font-size: 0.88rem;
+    padding: 12px 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .use-case-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .topbar-actions a,
+  .topbar-actions button {
+    font-size: 0.8rem;
+    padding: 9px 10px;
+  }
 }
