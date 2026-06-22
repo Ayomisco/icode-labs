@@ -97,6 +97,45 @@ function bitrateFor(quality: number, width: number, height: number, fps: number)
   return Math.round(width * height * bppFactor * fps);
 }
 
+// Not every device/browser supports the same H.264 profile+level in its
+// encoder (especially in software, when no hardware encoder is available —
+// many software encoders only do Baseline/Main, not High). Try a few
+// reasonable candidates instead of assuming one, and use whichever the
+// browser actually reports as supported.
+async function pickEncoderConfig(
+  width: number,
+  height: number,
+  bitrate: number,
+  framerate: number
+): Promise<VideoEncoderConfig | null> {
+  // avc1.PPCCLL — PP = profile_idc, LL = level_idc (level * 10), in hex.
+  // Try High and Main at generous levels first (better compression), then
+  // fall back to Baseline (broadest possible support).
+  const codecs = ["avc1.640033", "avc1.4d0033", "avc1.42001f"];
+  const accelerations: VideoEncoderConfig["hardwareAcceleration"][] = ["prefer-hardware", "no-preference"];
+
+  for (const hardwareAcceleration of accelerations) {
+    for (const codec of codecs) {
+      const config: VideoEncoderConfig = {
+        codec,
+        width,
+        height,
+        bitrate,
+        framerate,
+        hardwareAcceleration,
+        latencyMode: "quality",
+      };
+      try {
+        const support = await VideoEncoder.isConfigSupported(config);
+        if (support.supported) return support.config ?? config;
+      } catch {
+        // try next candidate
+      }
+    }
+  }
+  return null;
+}
+
 export async function compressVideoWebCodecs(
   file: File,
   quality: number,
@@ -142,18 +181,8 @@ export async function compressVideoWebCodecs(
   const decoderSupport = await VideoDecoder.isConfigSupported(decoderConfig);
   if (!decoderSupport.supported) throw new Error("VideoDecoder does not support this stream.");
 
-  const encoderConfig: VideoEncoderConfig = {
-    codec: "avc1.640028",
-    width,
-    height,
-    bitrate: bitrateFor(quality, width, height, fps),
-    framerate: fps,
-    hardwareAcceleration: "prefer-hardware",
-    latencyMode: "quality",
-  };
-
-  const encoderSupport = await VideoEncoder.isConfigSupported(encoderConfig);
-  if (!encoderSupport.supported) throw new Error("VideoEncoder does not support the target configuration.");
+  const encoderConfig = await pickEncoderConfig(width, height, bitrateFor(quality, width, height, fps), fps);
+  if (!encoderConfig) throw new Error("VideoEncoder does not support the target configuration.");
 
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
