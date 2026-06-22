@@ -255,9 +255,19 @@ export async function compressVideoWebCodecs(
     const entries: any[] = trak?.mdia?.minf?.stbl?.stsd?.entries ?? [];
     for (const entry of entries) {
       if (entry.esds) {
-        const stream = new MP4Box.DataStream();
-        entry.esds.write(stream);
-        audioDescription = new Uint8Array(stream.buffer, 8);
+        // The AudioSpecificConfig WebCodecs/mp4-muxer need is the
+        // DecoderSpecificInfo (tag 5) payload, nested inside the
+        // DecoderConfigDescriptor (tag 4) inside the ES_Descriptor (tag 3).
+        // esds is a FullBox wrapping this MPEG-4 descriptor tree — it is
+        // NOT just "skip N header bytes"; the tag/length wrapper bytes at
+        // each level must be parsed, not included. mp4box.js already
+        // parses this tree, so walk it instead of re-serializing raw bytes.
+        const decSpecificInfo = entry.esds.esd?.descs
+          ?.find((d: any) => d.tag === 4)
+          ?.descs?.find((d: any) => d.tag === 5);
+        if (decSpecificInfo?.data) {
+          audioDescription = Uint8Array.from(Object.values(decSpecificInfo.data) as number[]);
+        }
         break;
       }
     }
