@@ -87,32 +87,51 @@ async function compressImage(file: File, quality: number): Promise<Blob> {
 async function compressVideo(
   file: File,
   quality: number,
-  onProgress: (pct: number) => void
+  onProgress: (pct: number) => void,
+  onStatus: (msg: string) => void
 ): Promise<Blob> {
   const { FFmpeg } = await import("@ffmpeg/ffmpeg");
   const { fetchFile, toBlobURL } = await import("@ffmpeg/util");
 
   const ffmpeg = new FFmpeg();
-  ffmpeg.on("progress", ({ progress }) => onProgress(Math.round(progress * 100)));
+  ffmpeg.on("progress", ({ progress }) => onProgress(Math.round(Math.min(1, Math.max(0, progress)) * 100)));
 
-  const base = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+  // Multi-threaded core: uses all CPU cores via SharedArrayBuffer — several times
+  // faster than the single-threaded build. Requires COOP/COEP headers (set on /compress).
+  const threaded = typeof SharedArrayBuffer !== "undefined";
+  const base = threaded
+    ? "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/umd"
+    : "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+
+  onStatus(threaded ? "Loading FFmpeg engine (multi-threaded)…" : "Loading FFmpeg engine…");
+
   await ffmpeg.load({
     coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
     wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
+    ...(threaded
+      ? { workerURL: await toBlobURL(`${base}/ffmpeg-core.worker.js`, "text/javascript") }
+      : {}),
   });
+
+  onStatus("");
 
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "mp4";
   const input = `in.${ext}`;
   ffmpeg.writeFile(input, await fetchFile(file));
 
-  // CRF: 18 (near-lossless) → 35 (heavy compression)
-  const crf = Math.round(18 + (1 - quality) * 17);
+  // CRF: 20 (near-lossless) → 34 (heavy compression)
+  const crf = Math.round(20 + (1 - quality) * 14);
+  // Faster presets trade a little compression efficiency for much shorter encode time
+  const preset = quality >= 0.8 ? "fast" : quality >= 0.4 ? "veryfast" : "ultrafast";
+  // Downscale very large/heavy-compression sources to cut encode time further
+  const scaleArgs = quality < 0.6 ? ["-vf", "scale='min(1280,iw)':-2"] : [];
 
   await ffmpeg.exec([
     "-i", input,
     "-c:v", "libx264",
     "-crf", String(crf),
-    "-preset", "fast",
+    "-preset", preset,
+    ...scaleArgs,
     "-c:a", "aac",
     "-b:a", quality > 0.7 ? "192k" : "128k",
     "-movflags", "+faststart",
@@ -196,11 +215,12 @@ export default function CompressPage() {
           blob = await compressImage(file, quality);
           setProgress(100);
         } else if (tab === "videos") {
-          setFfmpegStatus("Loading FFmpeg engine (~25 MB, first run only)…");
-          blob = await compressVideo(file, quality, (pct) => {
-            setFfmpegStatus("");
-            setProgress(pct);
-          });
+          blob = await compressVideo(
+            file,
+            quality,
+            (pct) => setProgress(pct),
+            (msg) => setFfmpegStatus(msg)
+          );
         } else if (tab === "documents") {
           setProgress(30);
           blob = await compressDocument(file);
