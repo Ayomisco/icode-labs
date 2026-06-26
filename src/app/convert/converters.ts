@@ -323,6 +323,8 @@ export async function splitPdf(file: File): Promise<{ blob: Blob; ext: string }>
 }
 
 // ─── DOCX → PDF ───────────────────────────────────────────────────────────────
+// Container matches US Letter at 96 dpi: 816px wide, 96px (1in) padding each side.
+// That maps 1:1 to jsPDF Letter (612pt wide) via the 0.75 pt/px ratio at 96 dpi.
 
 export async function docxToPdf(file: File): Promise<{ blob: Blob; ext: string }> {
   const mammoth = await import("mammoth");
@@ -332,51 +334,68 @@ export async function docxToPdf(file: File): Promise<{ blob: Blob; ext: string }
   const data = await file.arrayBuffer();
   const result = await mammoth.convertToHtml({ arrayBuffer: data });
 
+  const RENDER_SCALE = 3;
+  const CONTAINER_PX = 816; // 8.5 in × 96 dpi = US Letter width
+  const MARGIN_PX = 96;     // 1 in × 96 dpi = standard Word margin
+
   const container = document.createElement("div");
   container.style.cssText =
-    "position:fixed;left:-9999px;top:0;width:794px;min-height:100px;background:#fff;" +
-    "padding:72px 88px;font-family:'Times New Roman',Times,serif;font-size:12pt;" +
-    "line-height:1.7;color:#000;box-sizing:border-box;";
+    `position:fixed;left:-9999px;top:0;width:${CONTAINER_PX}px;background:#fff;` +
+    `padding:${MARGIN_PX}px;font-family:Calibri,'Segoe UI',Arial,sans-serif;` +
+    `font-size:11pt;line-height:1.15;color:#000;box-sizing:border-box;word-wrap:break-word;`;
+
   container.innerHTML = `
     <style>
-      *{box-sizing:border-box}
-      h1{font-size:22pt;margin:0 0 14px}
-      h2{font-size:18pt;margin:12px 0 10px}
-      h3{font-size:14pt;margin:10px 0 8px}
-      h4,h5,h6{font-size:12pt;margin:8px 0 6px}
-      p{margin:0 0 10px}
-      table{border-collapse:collapse;width:100%;margin:14px 0}
-      td,th{border:1px solid #888;padding:6px 10px;font-size:11pt}
-      th{background:#e8e8e8;font-weight:700}
-      ul,ol{margin:0 0 10px;padding-left:22px}
-      li{margin-bottom:4px}
+      *{box-sizing:border-box;margin:0;padding:0}
+      p{margin:0 0 8pt;line-height:1.15;orphans:2;widows:2}
+      h1{font-size:16pt;font-weight:700;color:#2E74B5;margin:16pt 0 4pt;line-height:1.1}
+      h2{font-size:13pt;font-weight:700;color:#2E74B5;margin:14pt 0 4pt;line-height:1.1}
+      h3{font-size:12pt;font-weight:700;color:#1F3864;margin:12pt 0 4pt;line-height:1.1}
+      h4,h5,h6{font-size:11pt;font-weight:700;margin:10pt 0 4pt;line-height:1.1}
+      table{border-collapse:collapse;width:100%;margin:8pt 0;font-size:10pt}
+      td,th{border:1px solid #AEAAAA;padding:3pt 5.4pt;vertical-align:top;line-height:1.15}
+      th{background:#4472C4;color:#fff;font-weight:700;text-align:left}
+      tr:nth-child(even) td{background:#D9E2F3}
+      ul,ol{margin:0 0 8pt;padding-left:18pt}
+      li{margin-bottom:2pt;line-height:1.15}
       strong,b{font-weight:700}
       em,i{font-style:italic}
+      u{text-decoration:underline}
       img{max-width:100%;height:auto}
-      a{color:#1a0dab;text-decoration:underline}
+      a{color:#0563C1;text-decoration:underline}
+      blockquote{margin:0 0 8pt 18pt;border-left:3px solid #D0D0D0;padding-left:10pt;color:#404040}
+      pre,code{font-family:'Courier New',monospace;font-size:9pt;background:#F5F5F5;padding:1pt 3pt;border-radius:2pt}
+      hr{border:none;border-top:1px solid #D0D0D0;margin:8pt 0}
     </style>
     ${result.value}
   `;
   document.body.appendChild(container);
 
-  const canvas = await html2canvas(container, { scale: 2, useCORS: true, logging: false });
+  const canvas = await html2canvas(container, {
+    scale: RENDER_SCALE,
+    useCORS: true,
+    logging: false,
+    backgroundColor: "#ffffff",
+    imageTimeout: 15000,
+  });
   document.body.removeChild(container);
 
-  const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-  const imgW = pageW;
-  const imgH = (canvas.height * pageW) / canvas.width;
-  const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+  // 1 CSS px = 0.75 pt at 96 dpi. At render scale N, 1 pt = N/0.75 canvas pixels.
+  const PT_PER_CANVAS_PX = 0.75 / RENDER_SCALE;
+  const pdf = new jsPDF({ unit: "pt", format: "letter", orientation: "portrait" });
+  const pageW = pdf.internal.pageSize.getWidth();   // 612 pt
+  const pageH = pdf.internal.pageSize.getHeight();  // 792 pt
+  const imgW = canvas.width * PT_PER_CANVAS_PX;     // should equal 612 pt
+  const imgH = canvas.height * PT_PER_CANVAS_PX;
+  const dataUrl = canvas.toDataURL("image/png");     // lossless for text sharpness
 
-  let remaining = imgH;
-  let yOffset = 0;
-
-  while (remaining > 0) {
-    pdf.addImage(dataUrl, "JPEG", 0, -yOffset, imgW, imgH);
-    remaining -= pageH;
-    yOffset += pageH;
-    if (remaining > 0) pdf.addPage();
+  let yPt = 0;
+  let firstPage = true;
+  while (yPt < imgH) {
+    if (!firstPage) pdf.addPage();
+    firstPage = false;
+    pdf.addImage(dataUrl, "PNG", 0, -yPt, imgW, imgH);
+    yPt += pageH;
   }
 
   return {
@@ -391,11 +410,37 @@ export async function docxToHtml(file: File): Promise<{ blob: Blob; ext: string 
   const mammoth = await import("mammoth");
   const data = await file.arrayBuffer();
   const result = await mammoth.convertToHtml({ arrayBuffer: data });
-  const full = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-    body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;padding:0 24px;line-height:1.7;color:#111}
-    h1,h2,h3{color:#1a1a2e}table{border-collapse:collapse;width:100%}
-    td,th{border:1px solid #ccc;padding:8px}th{background:#f0f0f0}
-  </style></head><body>${result.value}</body></html>`;
+  const full = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Calibri,'Segoe UI',Arial,sans-serif;font-size:11pt;line-height:1.15;
+       color:#000;background:#fff;max-width:816px;margin:0 auto;padding:96px}
+  p{margin:0 0 8pt;line-height:1.15}
+  h1{font-size:16pt;font-weight:700;color:#2E74B5;margin:16pt 0 4pt}
+  h2{font-size:13pt;font-weight:700;color:#2E74B5;margin:14pt 0 4pt}
+  h3{font-size:12pt;font-weight:700;color:#1F3864;margin:12pt 0 4pt}
+  h4,h5,h6{font-size:11pt;font-weight:700;margin:10pt 0 4pt}
+  table{border-collapse:collapse;width:100%;margin:8pt 0;font-size:10pt}
+  td,th{border:1px solid #AEAAAA;padding:3pt 5.4pt;vertical-align:top}
+  th{background:#4472C4;color:#fff;font-weight:700;text-align:left}
+  tr:nth-child(even) td{background:#D9E2F3}
+  ul,ol{margin:0 0 8pt;padding-left:18pt}
+  li{margin-bottom:2pt}
+  strong,b{font-weight:700}
+  em,i{font-style:italic}
+  img{max-width:100%;height:auto}
+  a{color:#0563C1;text-decoration:underline}
+  blockquote{margin:0 0 8pt 18pt;border-left:3px solid #D0D0D0;padding-left:10pt;color:#404040}
+  pre,code{font-family:'Courier New',monospace;font-size:9pt;background:#F5F5F5;padding:2pt 4pt;border-radius:2pt}
+  hr{border:none;border-top:1px solid #D0D0D0;margin:8pt 0}
+</style>
+</head>
+<body>${result.value}</body>
+</html>`;
   return { blob: new Blob([full], { type: "text/html" }), ext: "html" };
 }
 
@@ -409,6 +454,12 @@ export async function docxToText(file: File): Promise<{ blob: Blob; ext: string 
 }
 
 // ─── XLSX → PDF ───────────────────────────────────────────────────────────────
+// Builds the HTML table manually so we can honour actual column widths and
+// apply proper header/row styling rather than relying on sheet_to_html.
+
+function xlsxEscape(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 export async function xlsxToPdf(
   file: File,
@@ -419,6 +470,9 @@ export async function xlsxToPdf(
   const { jsPDF } = await import("jspdf");
   const { PDFDocument } = await import("pdf-lib");
 
+  const RENDER_SCALE = 3;
+  const PT_PER_CANVAS_PX = 0.75 / RENDER_SCALE;
+
   const data = await file.arrayBuffer();
   const wb = XLSX.read(data, { type: "array", cellStyles: true, cellDates: true });
   const sheetPdfs: ArrayBuffer[] = [];
@@ -426,30 +480,102 @@ export async function xlsxToPdf(
   for (let si = 0; si < wb.SheetNames.length; si++) {
     const sheetName = wb.SheetNames[si];
     const ws = wb.Sheets[sheetName];
-    const html = XLSX.utils.sheet_to_html(ws, { id: "conv-table" });
+    const ref = ws["!ref"];
+    if (!ref) continue;
+
+    const range = XLSX.utils.decode_range(ref);
+    const colDefs = ws["!cols"] as Array<{ wpx?: number; wch?: number }> | undefined ?? [];
+    const mergeDefs = (ws["!merges"] as Array<{ s: { r: number; c: number }; e: { r: number; c: number } }>) ?? [];
+
+    // Build a merge lookup: "r,c" → { rowspan, colspan } for the top-left cell,
+    // and "r,c" → "skip" for the covered cells.
+    const mergeMap = new Map<string, { rowspan: number; colspan: number } | "skip">();
+    for (const m of mergeDefs) {
+      for (let r = m.s.r; r <= m.e.r; r++) {
+        for (let c = m.s.c; c <= m.e.c; c++) {
+          const key = `${r},${c}`;
+          if (r === m.s.r && c === m.s.c) {
+            mergeMap.set(key, { rowspan: m.e.r - m.s.r + 1, colspan: m.e.c - m.s.c + 1 });
+          } else {
+            mergeMap.set(key, "skip");
+          }
+        }
+      }
+    }
+
+    // Column widths in px (Excel default char width ≈ 7.5px, default wch = 8.43)
+    const colWidthsPx: number[] = [];
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const def = colDefs[c];
+      colWidthsPx.push(def?.wpx ?? (def?.wch ? Math.round(def.wch * 7.5) : 80));
+    }
+
+    // Build table HTML
+    let tableHtml = `<table style="border-collapse:collapse;border-spacing:0;font-family:Calibri,Arial,sans-serif;font-size:11px;table-layout:fixed">`;
+    tableHtml += `<colgroup>`;
+    for (const w of colWidthsPx) tableHtml += `<col style="width:${w}px">`;
+    tableHtml += `</colgroup>`;
+
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      const isHeader = r === range.s.r;
+      const isEven = (r - range.s.r) % 2 === 1;
+      const rowBg = isHeader ? "#17375E" : isEven ? "#D9E2F3" : "#FFFFFF";
+      const rowColor = isHeader ? "#FFFFFF" : "#000000";
+      const rowWeight = isHeader ? "700" : "400";
+
+      tableHtml += `<tr>`;
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const mergeInfo = mergeMap.get(`${r},${c}`);
+        if (mergeInfo === "skip") continue;
+
+        const cellAddr = XLSX.utils.encode_cell({ r, c });
+        const cell = ws[cellAddr];
+        const raw = cell ? XLSX.utils.format_cell(cell) : "";
+        const value = xlsxEscape(raw);
+
+        let attrs = `style="border:1px solid #8EA9C1;padding:4px 6px;vertical-align:middle;` +
+          `background:${rowBg};color:${rowColor};font-weight:${rowWeight};` +
+          `white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px"`;
+
+        if (mergeInfo && typeof mergeInfo === "object") {
+          if (mergeInfo.rowspan > 1) attrs += ` rowspan="${mergeInfo.rowspan}"`;
+          if (mergeInfo.colspan > 1) attrs += ` colspan="${mergeInfo.colspan}"`;
+        }
+
+        tableHtml += `<td ${attrs}>${value}</td>`;
+      }
+      tableHtml += `</tr>`;
+    }
+    tableHtml += `</table>`;
+
+    const totalColW = colWidthsPx.reduce((a, b) => a + b, 0);
+    const containerW = Math.max(totalColW + 48, 600);
 
     const container = document.createElement("div");
     container.style.cssText =
-      "position:fixed;left:-9999px;top:0;background:#fff;padding:24px 20px;" +
-      "font-family:Arial,sans-serif;font-size:11px;min-width:600px;box-sizing:border-box;";
+      `position:fixed;left:-9999px;top:0;background:#fff;padding:24px;` +
+      `width:${containerW}px;box-sizing:border-box;`;
     container.innerHTML = `
-      <style>
-        #conv-table{border-collapse:collapse;min-width:100%}
-        #conv-table td,#conv-table th{border:1px solid #bbb;padding:4px 8px;white-space:nowrap;vertical-align:middle}
-        #conv-table tr:first-child td,#conv-table tr:first-child th{background:#e8f0fe;font-weight:700;color:#1a237e}
-        #conv-table tr:nth-child(even){background:#f8f9fa}
-      </style>
-      <div style="font-size:13px;font-weight:700;color:#333;margin-bottom:10px;border-bottom:2px solid #4285f4;padding-bottom:6px">
-        ${sheetName}
+      <div style="font-family:Calibri,Arial,sans-serif;font-size:13px;font-weight:700;color:#17375E;
+                  margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #17375E">
+        ${xlsxEscape(sheetName)}
       </div>
-      ${html}
+      ${tableHtml}
     `;
     document.body.appendChild(container);
 
-    const canvas = await html2canvas(container, { scale: 2, useCORS: true, logging: false });
+    const canvas = await html2canvas(container, {
+      scale: RENDER_SCALE,
+      useCORS: true,
+      logging: false,
+      backgroundColor: "#ffffff",
+    });
     document.body.removeChild(container);
 
-    const isLandscape = canvas.width > canvas.height;
+    const imgW = canvas.width * PT_PER_CANVAS_PX;
+    const imgH = canvas.height * PT_PER_CANVAS_PX;
+    const isLandscape = imgW > 612;
+
     const pdf = new jsPDF({
       unit: "pt",
       format: "a4",
@@ -457,17 +583,21 @@ export async function xlsxToPdf(
     });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
-    const imgW = pageW;
-    const imgH = (canvas.height * pageW) / canvas.width;
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+    // Scale to fit page width with 24pt margin each side
+    const margin = 24;
+    const fitW = pageW - margin * 2;
+    const scale = fitW / imgW;
+    const scaledW = imgW * scale;
+    const scaledH = imgH * scale;
+    const dataUrl = canvas.toDataURL("image/png");
 
-    let remaining = imgH;
-    let yOffset = 0;
-    while (remaining > 0) {
-      pdf.addImage(dataUrl, "JPEG", 0, -yOffset, imgW, imgH);
-      remaining -= pageH;
-      yOffset += pageH;
-      if (remaining > 0) pdf.addPage();
+    let yPt = 0;
+    let firstPage = true;
+    while (yPt < scaledH) {
+      if (!firstPage) pdf.addPage();
+      firstPage = false;
+      pdf.addImage(dataUrl, "PNG", margin, margin - yPt, scaledW, scaledH);
+      yPt += pageH - margin * 2;
     }
 
     sheetPdfs.push(pdf.output("arraybuffer"));
