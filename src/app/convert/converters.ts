@@ -172,6 +172,115 @@ export async function pdfToText(
   };
 }
 
+// ─── PDF → Word (DOCX) ────────────────────────────────────────────────────────
+
+export async function pdfToDocx(
+  file: File,
+  onProgress?: (pct: number) => void
+): Promise<{ blob: Blob; ext: string }> {
+  const pdfjsLib = await getPdfjs();
+  const { Document, Paragraph, TextRun, Packer, PageBreak } = await import("docx");
+
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjsLib.getDocument({ data: data as unknown as Uint8Array }).promise;
+  const numPages = pdf.numPages;
+  const docChildren: InstanceType<Awaited<typeof import("docx")>["Paragraph"]>[] = [];
+
+  for (let i = 1; i <= numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+
+    // Group text items into lines by rounding Y coordinate
+    const lineMap = new Map<number, { x: number; str: string }[]>();
+    for (const item of content.items) {
+      if (!("str" in item) || !(item as { str: string }).str.trim()) continue;
+      const it = item as { str: string; transform: number[] };
+      const y = Math.round(it.transform[5] / 6) * 6;
+      if (!lineMap.has(y)) lineMap.set(y, []);
+      lineMap.get(y)!.push({ x: it.transform[4], str: it.str });
+    }
+
+    // Sort lines top-to-bottom (PDF Y is bottom-up, so sort descending)
+    const sortedYs = Array.from(lineMap.keys()).sort((a, b) => b - a);
+
+    if (i > 1) {
+      docChildren.push(new Paragraph({ children: [new PageBreak()] }));
+    }
+
+    for (const y of sortedYs) {
+      const lineText = lineMap
+        .get(y)!
+        .sort((a, b) => a.x - b.x)
+        .map((t) => t.str)
+        .join(" ")
+        .trim();
+      if (!lineText) continue;
+      docChildren.push(
+        new Paragraph({ children: [new TextRun({ text: lineText, size: 24, font: "Calibri" })] })
+      );
+    }
+
+    onProgress?.(Math.round((i / numPages) * 100));
+  }
+
+  const doc = new Document({
+    sections: [{ properties: {}, children: docChildren }],
+  });
+
+  return { blob: await Packer.toBlob(doc), ext: "docx" };
+}
+
+// ─── PDF → Excel (XLSX) ───────────────────────────────────────────────────────
+
+export async function pdfToXlsx(
+  file: File,
+  onProgress?: (pct: number) => void
+): Promise<{ blob: Blob; ext: string }> {
+  const pdfjsLib = await getPdfjs();
+  const XLSX = await import("xlsx");
+
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjsLib.getDocument({ data: data as unknown as Uint8Array }).promise;
+  const numPages = pdf.numPages;
+  const wb = XLSX.utils.book_new();
+
+  for (let i = 1; i <= numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+
+    // Group items by rounded Y into rows, sort each row by X for columns
+    const rowMap = new Map<number, { x: number; str: string }[]>();
+    for (const item of content.items) {
+      if (!("str" in item)) continue;
+      const it = item as { str: string; transform: number[] };
+      const y = Math.round(it.transform[5] / 8) * 8;
+      if (!rowMap.has(y)) rowMap.set(y, []);
+      rowMap.get(y)!.push({ x: it.transform[4], str: it.str });
+    }
+
+    const sheetData: string[][] = Array.from(rowMap.keys())
+      .sort((a, b) => b - a)
+      .map((y) =>
+        rowMap
+          .get(y)!
+          .sort((a, b) => a.x - b.x)
+          .map((t) => t.str.trim())
+          .filter(Boolean)
+      )
+      .filter((row) => row.length > 0);
+
+    const ws = XLSX.utils.aoa_to_sheet(sheetData.length ? sheetData : [["No extractable content"]]);
+    XLSX.utils.book_append_sheet(wb, ws, `Page ${i}`);
+    onProgress?.(Math.round((i / numPages) * 100));
+  }
+
+  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+  return {
+    blob: new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+    ext: "xlsx",
+  };
+}
+
 // ─── Merge PDFs ───────────────────────────────────────────────────────────────
 
 export async function mergePdfs(files: File[]): Promise<{ blob: Blob; ext: string }> {

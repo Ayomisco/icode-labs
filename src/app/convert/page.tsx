@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import {
   convertImage, imagesToPdf, pdfToImages, pdfToText,
+  pdfToDocx, pdfToXlsx,
   mergePdfs, splitPdf, docxToPdf, docxToHtml, docxToText,
   xlsxToPdf, xlsxToCsv, csvToXlsx, xlsxToJson, jsonToCsv, csvToJson,
   filesToZip, extractZip, formatBytes,
@@ -36,6 +37,8 @@ const PDF_OPS = [
   { id: "pdf-to-png",   label: "PDF → PNG Images",   icon: ImageIcon,             multi: false, hint: "Converts each page to a PNG image" },
   { id: "pdf-to-jpg",   label: "PDF → JPG Images",   icon: ImageIcon,             multi: false, hint: "Converts each page to a JPG image" },
   { id: "pdf-to-text",  label: "PDF → Text",         icon: FileText,              multi: false, hint: "Extracts all readable text from PDF" },
+  { id: "pdf-to-word",  label: "PDF → Word",         icon: FileText,              multi: false, hint: "Extracts text into a structured DOCX file" },
+  { id: "pdf-to-excel", label: "PDF → Excel",        icon: FileSpreadsheet,       multi: false, hint: "Extracts tabular data into an XLSX workbook" },
   { id: "images-to-pdf",label: "Images → PDF",       icon: FilePlus,              multi: true,  hint: "Combine one or more images into a PDF" },
   { id: "merge-pdf",    label: "Merge PDFs",         icon: Layers,                multi: true,  hint: "Combine multiple PDF files into one" },
   { id: "split-pdf",    label: "Split PDF",          icon: SplitSquareHorizontal, multi: false, hint: "Extract each page into its own PDF" },
@@ -173,6 +176,14 @@ export default function ConvertPage() {
           } else if (pdfOp === "pdf-to-text") {
             setStatusMsg("Extracting text…");
             const out = await pdfToText(files[0], (p) => setProgress(p));
+            outputs = [out];
+          } else if (pdfOp === "pdf-to-word") {
+            setStatusMsg("Converting PDF to Word document…");
+            const out = await pdfToDocx(files[0], (p) => setProgress(p));
+            outputs = [out];
+          } else if (pdfOp === "pdf-to-excel") {
+            setStatusMsg("Extracting data to Excel…");
+            const out = await pdfToXlsx(files[0], (p) => setProgress(p));
             outputs = [out];
           } else if (pdfOp === "images-to-pdf") {
             setStatusMsg("Building PDF…");
