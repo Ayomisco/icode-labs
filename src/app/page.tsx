@@ -603,33 +603,20 @@ export default function Home() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand-wrap">
-          <div className="brand-mark" aria-hidden>
-            <NextImage src="/icode-logo.svg" alt="icode logo" width={34} height={34} priority />
-          </div>
-          <div className="brand-text">icode</div>
+          <span className="brand-mark">
+            <NextImage src="/icode-logo.svg" alt="icode" width={34} height={34} priority />
+          </span>
+          <span className="brand-text">icode</span>
         </div>
+        <nav className="menu">
+          <Link href="/" style={{ color: "var(--ink-900)", fontWeight: 700 }}>QR Generator</Link>
+          <Link href="/compress">Compressor</Link>
+          <Link href="/convert">Converter</Link>
+          <Link href="/dashboard">Dashboard</Link>
+        </nav>
         <div className="topbar-actions">
-          <Link href="/compress" style={{ color: "var(--ink-700)", fontWeight: 600, fontSize: "0.93rem" }}>
-            Compressor
-          </Link>
-          <div className="forever-pill">Static QR Forever</div>
-          <button type="button" className="action-btn" onClick={clearAll}>
-            Reset Builder
-          </button>
-          {authUser ? (
-            <Link href="/dashboard" className="action-btn" style={{ textDecoration: "none" }}>
-              My Dashboard
-            </Link>
-          ) : (
-            <>
-              <Link href="/auth/login" className="action-btn" style={{ textDecoration: "none" }}>
-                Sign in
-              </Link>
-              <Link href="/auth/register" className="action-btn" style={{ textDecoration: "none", background: "linear-gradient(135deg,#2563eb,#0ea5e9)", color: "#fff", border: "none" }}>
-                Get started free
-              </Link>
-            </>
-          )}
+          <span className="forever-pill">Free · No signup</span>
+          <Link href="/auth/login" className="action-btn">Sign in</Link>
         </div>
       </header>
 

@@ -304,6 +304,7 @@ export default function CompressPage() {
           <Link href="/compress" style={{ color: "var(--ink-900)", fontWeight: 700 }}>
             Compressor
           </Link>
+          <Link href="/convert">Converter</Link>
           <Link href="/dashboard">Dashboard</Link>
         </nav>
         <div className="topbar-actions">
