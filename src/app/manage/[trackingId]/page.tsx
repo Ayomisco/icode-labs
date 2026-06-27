@@ -28,7 +28,17 @@ export default function ManagePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [copyDone, setCopyDone] = useState(false);
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "";
+  const [authUser, setAuthUser] = useState<{ email: string } | null | undefined>(undefined);
+
+  // Derive origin client-side — always correct regardless of env vars
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+  useEffect(() => {
+    fetch("/api/auth/me", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setAuthUser(d ?? null))
+      .catch(() => setAuthUser(null));
+  }, []);
 
   useEffect(() => {
     fetch(`/api/qr/${trackingId}`)
@@ -41,7 +51,7 @@ export default function ManagePage() {
         setQr(data);
         setNewDest(data.destination_url ?? "");
         setLoading(false);
-        QRCode.toDataURL(data.payload, { width: 200, margin: 2 })
+        QRCode.toDataURL(data.payload, { width: 280, margin: 2, errorCorrectionLevel: "H" })
           .then(setQrImage)
           .catch(() => {});
       })
@@ -54,6 +64,7 @@ export default function ManagePage() {
     const res = await fetch(`/api/qr/${trackingId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ destinationUrl: newDest }),
     });
     if (res.ok) {
@@ -66,9 +77,17 @@ export default function ManagePage() {
   }
 
   function copyRedirectUrl() {
-    navigator.clipboard.writeText(`${baseUrl}/r/${trackingId}`);
+    navigator.clipboard.writeText(`${origin}/r/${trackingId}`);
     setCopyDone(true);
     setTimeout(() => setCopyDone(false), 2000);
+  }
+
+  function downloadQr() {
+    if (!qrImage) return;
+    const a = document.createElement("a");
+    a.href = qrImage;
+    a.download = `${qr?.name ?? trackingId}_qr.png`;
+    a.click();
   }
 
   if (loading) return <div style={s.center}>Loading…</div>;
@@ -88,8 +107,14 @@ export default function ManagePage() {
           <span style={s.brandText}>icode</span>
         </Link>
         <div style={s.headerRight}>
-          <Link href="/auth/login" style={s.headerLink}>Sign in</Link>
-          <Link href="/auth/register" style={s.ctaBtn}>Create account</Link>
+          {authUser === undefined ? null : authUser ? (
+            <Link href="/dashboard" style={s.ctaBtn}>My Dashboard</Link>
+          ) : (
+            <>
+              <Link href="/auth/login" style={s.headerLink}>Sign in</Link>
+              <Link href="/auth/register" style={s.ctaBtn}>Create account</Link>
+            </>
+          )}
         </div>
       </header>
 
@@ -97,7 +122,10 @@ export default function ManagePage() {
         <div style={s.card}>
           <div style={s.cardHeader}>
             {qrImage && (
-              <NextImage src={qrImage} alt="QR Code" width={140} height={140} unoptimized style={s.qrImg} />
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                <img src={qrImage} alt="QR Code" width={140} height={140} style={s.qrImg} />
+                <button onClick={downloadQr} style={s.dlBtn}>Download PNG</button>
+              </div>
             )}
             <div style={s.cardMeta}>
               <h1 style={s.qrName}>{qr!.name}</h1>
@@ -111,21 +139,34 @@ export default function ManagePage() {
                 </span>
               </div>
               <div style={s.statsRow}>
-                <span style={s.stat}>{qr!.scan_count} scans</span>
+                <span style={s.stat}>{qr!.scan_count} scan{qr!.scan_count !== 1 ? "s" : ""}</span>
                 <span style={s.stat}>Created {new Date(qr!.created_at).toLocaleDateString()}</span>
               </div>
             </div>
           </div>
 
           <div style={s.section}>
-            <label style={s.sectionLabel}>Redirect link (share this)</label>
+            <label style={s.sectionLabel}>Tracking Code</label>
             <div style={s.copyRow}>
-              <code style={s.codeBox}>{baseUrl}/r/{trackingId}</code>
-              <button style={s.copyBtn} onClick={copyRedirectUrl}>
-                {copyDone ? "Copied!" : "Copy"}
+              <code style={s.codeBox}>{trackingId}</code>
+              <button style={s.copyBtn} onClick={() => { navigator.clipboard.writeText(trackingId); }}>
+                Copy code
               </button>
             </div>
+            <p style={s.hint}>Use this code to search for this QR code in your dashboard.</p>
           </div>
+
+          {qr!.is_dynamic && (
+            <div style={s.section}>
+              <label style={s.sectionLabel}>Redirect link</label>
+              <div style={s.copyRow}>
+                <code style={s.codeBox}>{origin}/r/{trackingId}</code>
+                <button style={s.copyBtn} onClick={copyRedirectUrl}>
+                  {copyDone ? "Copied!" : "Copy"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {qr!.is_dynamic && (
             <div style={s.section}>
@@ -148,20 +189,30 @@ export default function ManagePage() {
           {!qr!.is_dynamic && (
             <div style={s.section}>
               <label style={s.sectionLabel}>Encoded content</label>
-              <p style={s.hint}>This is a static QR. The content is baked into the image and cannot be changed.</p>
               <code style={{ ...s.codeBox, display: "block", wordBreak: "break-all", whiteSpace: "pre-wrap" }}>
                 {qr!.payload}
               </code>
             </div>
           )}
 
-          <div style={s.cta}>
-            <p style={s.ctaText}>Create a free account to manage all your QR codes in one place.</p>
-            <div style={s.ctaButtons}>
-              <Link href="/auth/register" style={s.ctaBtnPrimary}>Create free account</Link>
-              <Link href="/" style={s.ctaBtnSecondary}>Build another QR</Link>
+          {!authUser && (
+            <div style={s.cta}>
+              <p style={s.ctaText}>Create a free account to manage all your QR codes in one place.</p>
+              <div style={s.ctaButtons}>
+                <Link href="/auth/register" style={s.ctaBtnPrimary}>Create free account</Link>
+                <Link href="/" style={s.ctaBtnSecondary}>Build another QR</Link>
+              </div>
             </div>
-          </div>
+          )}
+
+          {authUser && (
+            <div style={{ ...s.cta, background: "linear-gradient(135deg,#f0f4ff,#e8f5f0)" }}>
+              <div style={s.ctaButtons}>
+                <Link href="/dashboard" style={s.ctaBtnPrimary}>← Back to Dashboard</Link>
+                <Link href="/" style={s.ctaBtnSecondary}>Build another QR</Link>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>
@@ -180,7 +231,8 @@ const s: Record<string, React.CSSProperties> = {
   main: { maxWidth: "600px", margin: "0 auto", padding: "40px 24px" },
   card: { background: "#fff", borderRadius: "20px", padding: "32px", boxShadow: "0 4px 24px rgba(31,47,86,0.08)" },
   cardHeader: { display: "flex", gap: "20px", alignItems: "flex-start", marginBottom: "28px" },
-  qrImg: { borderRadius: "12px", border: "1px solid #f3f4f6", flexShrink: 0 },
+  qrImg: { borderRadius: "12px", border: "1px solid #f3f4f6", display: "block" },
+  dlBtn: { width: "100%", padding: "7px 0", background: "linear-gradient(135deg,#2563eb,#0ea5e9)", color: "#fff", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", fontFamily: "Manrope, sans-serif" },
   cardMeta: { flex: 1 },
   qrName: { fontSize: "22px", fontWeight: 700, color: "#1f2f56", margin: "0 0 10px" },
   badges: { display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "10px" },
@@ -193,7 +245,7 @@ const s: Record<string, React.CSSProperties> = {
   successHint: { fontSize: "13px", color: "#16a34a", margin: "0" },
   copyRow: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" },
   codeBox: { fontSize: "13px", fontFamily: "monospace", background: "#f8fafc", padding: "8px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", color: "#1f2f56", flex: 1 },
-  copyBtn: { fontSize: "12px", padding: "8px 14px", borderRadius: "8px", border: "1.5px solid #2563eb", background: "#fff", color: "#2563eb", fontWeight: 700, cursor: "pointer", fontFamily: "Manrope, sans-serif" },
+  copyBtn: { fontSize: "12px", padding: "8px 14px", borderRadius: "8px", border: "1.5px solid #2563eb", background: "#fff", color: "#2563eb", fontWeight: 700, cursor: "pointer", fontFamily: "Manrope, sans-serif", whiteSpace: "nowrap" },
   input: { padding: "10px 14px", borderRadius: "10px", border: "1.5px solid #e5e7eb", fontSize: "14px", outline: "none", fontFamily: "Manrope, sans-serif", width: "100%", boxSizing: "border-box" },
   saveBtn: { background: "linear-gradient(135deg, #2563eb, #0ea5e9)", color: "#fff", border: "none", borderRadius: "10px", padding: "11px 20px", fontSize: "14px", fontWeight: 700, cursor: "pointer", fontFamily: "Manrope, sans-serif", alignSelf: "flex-start" },
   cta: { background: "linear-gradient(135deg, #f0f4ff, #e8f5f0)", borderRadius: "14px", padding: "24px", marginTop: "8px" },

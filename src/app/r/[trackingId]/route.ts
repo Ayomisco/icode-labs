@@ -10,7 +10,7 @@ export async function GET(
   const base = new URL(request.url).origin;
 
   const rows = await sql`
-    SELECT destination_url, is_dynamic, is_active, scan_count, max_scans, expires_at
+    SELECT destination_url, payload, is_dynamic, is_active, scan_count, max_scans, expires_at
     FROM qr_codes WHERE tracking_id = ${id}
   `;
 
@@ -39,8 +39,14 @@ export async function GET(
   sql`UPDATE qr_codes SET scan_count = scan_count + 1, updated_at = NOW() WHERE tracking_id = ${id}`.catch(() => {});
   sql`INSERT INTO scan_logs (tracking_id) VALUES (${id})`.catch(() => {});
 
+  // Dynamic QR: redirect to the editable destination URL
   if (qr.is_dynamic && qr.destination_url) {
     return NextResponse.redirect(qr.destination_url);
+  }
+
+  // Static QR: redirect to the original encoded payload (the real URL/content)
+  if (qr.payload) {
+    return NextResponse.redirect(qr.payload);
   }
 
   return NextResponse.redirect(`${base}/`);

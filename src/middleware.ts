@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyToken, COOKIE_NAME } from "@/lib/auth";
 
 // Routes that require a logged-in user
-const USER_ROUTES = ["/dashboard", "/manage"];
+const USER_ROUTES = ["/dashboard"];
 // Routes that require an admin session
 const ADMIN_ROUTES = ["/admin"];
 // Auth pages — redirect away if already logged in
@@ -46,7 +46,6 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/dashboard/:path*",
-    "/manage/:path*",
     "/admin/:path*",
     "/auth/:path*",
   ],
