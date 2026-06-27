@@ -38,7 +38,12 @@ export async function POST(request: NextRequest) {
   }
 
   const isDynamic = DYNAMIC_USE_CASES.has(useCase);
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+
+  // Derive the canonical origin from the request so it works on any host
+  // without depending on NEXT_PUBLIC_BASE_URL being correctly formatted.
+  const proto = request.headers.get("x-forwarded-proto") ?? "https";
+  const host = request.headers.get("host") ?? "localhost:3000";
+  const baseUrl = `${proto}://${host}`;
 
   // Try up to 3 times to get a unique tracking ID
   let trackingId = "";
@@ -81,6 +86,6 @@ export async function POST(request: NextRequest) {
     destinationUrl: qr.destination_url,
     payload: qr.payload,         // the actual encoded value (redirect URL or direct)
     redirectUrl: isDynamic ? qr.payload : null,
-    manageUrl: `${baseUrl}/manage/${qr.tracking_id}`,
+    manageUrl: `/manage/${qr.tracking_id}`,
   });
 }
