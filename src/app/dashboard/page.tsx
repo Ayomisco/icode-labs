@@ -6,6 +6,77 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 
+function QrModal({ payload, name, onClose }: { payload: string; name: string; onClose: () => void }) {
+  const [dataUrl, setDataUrl] = useState("");
+
+  useEffect(() => {
+    QRCode.toDataURL(payload, { width: 400, margin: 2, errorCorrectionLevel: "H" })
+      .then(setDataUrl)
+      .catch(() => {});
+  }, [payload]);
+
+  function download() {
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `${name.replace(/\s+/g, "_")}_qr.png`;
+    a.click();
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 1000, backdropFilter: "blur(4px)",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#fff", borderRadius: 20, padding: "32px 28px",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 18,
+          boxShadow: "0 32px 64px rgba(0,0,0,0.22)", maxWidth: 460, width: "90%",
+        }}
+      >
+        <h3 style={{ fontSize: 17, fontWeight: 700, color: "#1f2f56", margin: 0, textAlign: "center" }}>
+          {name}
+        </h3>
+        {dataUrl ? (
+          <img src={dataUrl} alt={name} style={{ width: 300, height: 300, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+        ) : (
+          <div style={{ width: 300, height: 300, background: "#f3f4f6", borderRadius: 8, display: "grid", placeItems: "center", color: "#9ca3af" }}>
+            Loading…
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 10, width: "100%" }}>
+          <button
+            onClick={download}
+            disabled={!dataUrl}
+            style={{
+              flex: 1, padding: "11px 0", background: "linear-gradient(135deg,#2563eb,#0ea5e9)",
+              color: "#fff", border: "none", borderRadius: 10, fontWeight: 700,
+              fontSize: 14, cursor: "pointer",
+            }}
+          >
+            Download PNG
+          </button>
+          <button
+            onClick={onClose}
+            style={{
+              padding: "11px 18px", background: "transparent",
+              border: "1.5px solid #e5e7eb", borderRadius: 10,
+              fontWeight: 600, fontSize: 14, cursor: "pointer", color: "#6b7280",
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Sparkline({ data }: { data: number[] }) {
   if (!data.length) return null;
   const w = 120, h = 36, pad = 2;
@@ -48,6 +119,7 @@ export default function DashboardPage() {
   const [qrImages, setQrImages] = useState<Record<string, string>>({});
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<Record<string, number[]>>({});
+  const [viewQr, setViewQr] = useState<{ payload: string; name: string } | null>(null);
 
   useEffect(() => {
     // Check auth
@@ -152,6 +224,7 @@ export default function DashboardPage() {
 
   return (
     <div style={s.shell}>
+      {viewQr && <QrModal payload={viewQr.payload} name={viewQr.name} onClose={() => setViewQr(null)} />}
       <header style={s.header}>
         <Link href="/" style={s.brand}>
           <NextImage src="/icode-logo.svg" alt="icode" width={30} height={30} />
@@ -183,7 +256,13 @@ export default function DashboardPage() {
             <div key={qr.tracking_id} style={{ ...s.card, opacity: qr.is_active ? 1 : 0.6 }}>
               <div style={s.cardTop}>
                 {qrImages[qr.tracking_id] ? (
-                  <NextImage src={qrImages[qr.tracking_id]} alt="QR" width={72} height={72} unoptimized style={s.qrThumb} />
+                  <button
+                    onClick={() => setViewQr({ payload: qr.payload, name: qr.name })}
+                    title="Click to view full size"
+                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: 8, flexShrink: 0 }}
+                  >
+                    <NextImage src={qrImages[qr.tracking_id]} alt="QR" width={72} height={72} unoptimized style={{ ...s.qrThumb, transition: "transform 150ms", display: "block" }} />
+                  </button>
                 ) : (
                   <div style={s.qrPlaceholder} />
                 )}

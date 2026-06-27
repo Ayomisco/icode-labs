@@ -417,20 +417,6 @@ export default function Home() {
       const data = await res.json();
       setSavedInfo(data);
       setSaveStatus("saved");
-
-      // For dynamic QRs: regenerate the QR with the redirect URL so the download contains the right link
-      if (data.isDynamic && data.redirectUrl) {
-        const base = await QRCode.toDataURL(data.redirectUrl, {
-          width: size,
-          margin,
-          errorCorrectionLevel: ecLevel,
-          color: { dark: darkColor, light: transparentBg ? "#0000" : lightColor },
-        });
-        const final = gradientEnabled
-          ? await applyGradient(base, size, darkColor, gradientColor, transparentBg)
-          : base;
-        setQrDataUrl(final);
-      }
     } catch {
       setSaveStatus("error");
     }
@@ -616,7 +602,11 @@ export default function Home() {
         </nav>
         <div className="topbar-actions">
           <span className="forever-pill">Free · No signup</span>
-          <Link href="/auth/login" className="action-btn">Sign in</Link>
+          {authUser === undefined ? null : authUser ? (
+            <Link href="/dashboard" className="action-btn">My Dashboard</Link>
+          ) : (
+            <Link href="/auth/login" className="action-btn">Sign in</Link>
+          )}
         </div>
       </header>
 
@@ -861,7 +851,7 @@ export default function Home() {
             disabled={!qrDataUrl || !isStepComplete || isGenerating || saveStatus === "saving"}
             style={{ background: "linear-gradient(135deg,#059669,#10b981)", marginTop: "8px" }}
           >
-            {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : "Save & Get Tracking Link"}
+            {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : "Save & Get Tracking Code"}
           </button>
 
           {saveStatus === "error" && (
@@ -873,16 +863,14 @@ export default function Home() {
           {savedInfo && saveStatus === "saved" && (
             <div style={{ background: "linear-gradient(135deg,#f0fdf4,#ecfdf5)", border: "1.5px solid #a7f3d0", borderRadius: "14px", padding: "16px", marginTop: "4px" }}>
               <p style={{ fontSize: "13px", fontWeight: 700, color: "#065f46", margin: "0 0 8px" }}>
-                {savedInfo.isDynamic ? "Dynamic QR saved — redirect active!" : "QR code saved!"}
+                QR code saved!
               </p>
               <p style={{ fontSize: "12px", color: "#374151", margin: "0 0 4px" }}>
-                Tracking ID: <code style={{ fontFamily: "monospace", background: "#d1fae5", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>{savedInfo.trackingId}</code>
+                Tracking code: <code style={{ fontFamily: "monospace", background: "#d1fae5", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>{savedInfo.trackingId}</code>
               </p>
-              {savedInfo.isDynamic && (
-                <p style={{ fontSize: "12px", color: "#6b7280", margin: "4px 0 0" }}>
-                  QR now encodes your redirect link. Change the destination anytime — no reprint needed.
-                </p>
-              )}
+              <p style={{ fontSize: "12px", color: "#6b7280", margin: "4px 0 0" }}>
+                Use this code to find and manage your QR from the dashboard.
+              </p>
               <div style={{ display: "flex", gap: "8px", marginTop: "12px", flexWrap: "wrap" }}>
                 <a
                   href={savedInfo.manageUrl}
