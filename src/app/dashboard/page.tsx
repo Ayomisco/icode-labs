@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 
-function QrModal({ payload, name, onClose }: { payload: string; name: string; onClose: () => void }) {
+function QrModal({ payload, name, trackingId, onClose }: { payload: string; name: string; trackingId: string; onClose: () => void }) {
   const [dataUrl, setDataUrl] = useState("");
 
   useEffect(() => {
@@ -18,7 +18,7 @@ function QrModal({ payload, name, onClose }: { payload: string; name: string; on
   function download() {
     const a = document.createElement("a");
     a.href = dataUrl;
-    a.download = `${name.replace(/\s+/g, "_")}_qr.png`;
+    a.download = `icode-${trackingId}.png`;
     a.click();
   }
 
@@ -119,7 +119,7 @@ export default function DashboardPage() {
   const [qrImages, setQrImages] = useState<Record<string, string>>({});
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<Record<string, number[]>>({});
-  const [viewQr, setViewQr] = useState<{ payload: string; name: string } | null>(null);
+  const [viewQr, setViewQr] = useState<{ payload: string; name: string; trackingId: string } | null>(null);
 
   useEffect(() => {
     // Check auth
@@ -224,7 +224,7 @@ export default function DashboardPage() {
 
   return (
     <div style={s.shell}>
-      {viewQr && <QrModal payload={viewQr.payload} name={viewQr.name} onClose={() => setViewQr(null)} />}
+      {viewQr && <QrModal payload={viewQr.payload} name={viewQr.name} trackingId={viewQr.trackingId} onClose={() => setViewQr(null)} />}
       <header style={s.header}>
         <Link href="/" style={s.brand}>
           <NextImage src="/icode-logo.svg" alt="icode" width={30} height={30} />
@@ -257,7 +257,7 @@ export default function DashboardPage() {
               <div style={s.cardTop}>
                 {qrImages[qr.tracking_id] ? (
                   <button
-                    onClick={() => setViewQr({ payload: qr.destination_url || qr.payload, name: qr.name })}
+                    onClick={() => setViewQr({ payload: qr.destination_url || qr.payload, name: qr.name, trackingId: qr.tracking_id })}
                     title="Click to view full size"
                     style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: 8, flexShrink: 0 }}
                   >
