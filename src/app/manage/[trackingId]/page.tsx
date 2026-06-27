@@ -76,7 +76,7 @@ export default function ManagePage() {
     if (!qrImage) return;
     const a = document.createElement("a");
     a.href = qrImage;
-    a.download = `${qr?.name ?? trackingId}_qr.png`;
+    a.download = `icode-${trackingId}.png`;
     a.click();
   }
 

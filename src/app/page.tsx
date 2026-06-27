@@ -527,8 +527,8 @@ export default function Home() {
 
     const link = document.createElement("a");
     link.href = canvas.toDataURL("image/png");
-    const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
-    link.download = `icode-${rand}.png`;
+    const filename = savedInfo?.trackingId ?? Math.random().toString(36).slice(2, 7).toUpperCase();
+    link.download = `icode-${filename}.png`;
     link.click();
   };
 
@@ -545,8 +545,8 @@ export default function Home() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
-    link.download = `icode-${rand}.svg`;
+    const filename = savedInfo?.trackingId ?? Math.random().toString(36).slice(2, 7).toUpperCase();
+    link.download = `icode-${filename}.svg`;
     link.click();
     URL.revokeObjectURL(url);
   };
