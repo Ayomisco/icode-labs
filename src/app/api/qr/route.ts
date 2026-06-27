@@ -53,8 +53,9 @@ export async function POST(request: NextRequest) {
     if (existing.length === 0) break;
   }
 
-  const redirectUrl = `${baseUrl}/r/${trackingId}`;
-  const storedPayload = isDynamic ? redirectUrl : payload;
+  // Always encode the original content directly into the QR — no redirect link.
+  // destination_url tracks the "real" destination for dynamic types.
+  const storedPayload = payload;
   const destinationUrl = isDynamic ? payload : null;
 
   const rows = await sql`

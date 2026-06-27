@@ -145,7 +145,7 @@ export default function DashboardPage() {
   useEffect(() => {
     qrCodes.forEach((qr) => {
       if (qrImages[qr.tracking_id]) return;
-      QRCode.toDataURL(qr.payload, { width: 80, margin: 1 })
+      QRCode.toDataURL(qr.destination_url || qr.payload, { width: 80, margin: 1 })
         .then((url) => setQrImages((prev) => ({ ...prev, [qr.tracking_id]: url })))
         .catch(() => {});
     });
@@ -257,7 +257,7 @@ export default function DashboardPage() {
               <div style={s.cardTop}>
                 {qrImages[qr.tracking_id] ? (
                   <button
-                    onClick={() => setViewQr({ payload: qr.payload, name: qr.name })}
+                    onClick={() => setViewQr({ payload: qr.destination_url || qr.payload, name: qr.name })}
                     title="Click to view full size"
                     style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: 8, flexShrink: 0 }}
                   >

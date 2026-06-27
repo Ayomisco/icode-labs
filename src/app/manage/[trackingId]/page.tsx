@@ -27,11 +27,7 @@ export default function ManagePage() {
   const [newDest, setNewDest] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [copyDone, setCopyDone] = useState(false);
   const [authUser, setAuthUser] = useState<{ email: string } | null | undefined>(undefined);
-
-  // Derive origin client-side — always correct regardless of env vars
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
 
   useEffect(() => {
     fetch("/api/auth/me", { credentials: "include" })
@@ -51,7 +47,7 @@ export default function ManagePage() {
         setQr(data);
         setNewDest(data.destination_url ?? "");
         setLoading(false);
-        QRCode.toDataURL(data.payload, { width: 280, margin: 2, errorCorrectionLevel: "H" })
+        QRCode.toDataURL(data.destination_url || data.payload, { width: 280, margin: 2, errorCorrectionLevel: "H" })
           .then(setQrImage)
           .catch(() => {});
       })
@@ -74,12 +70,6 @@ export default function ManagePage() {
       setTimeout(() => setSaved(false), 3000);
     }
     setSaving(false);
-  }
-
-  function copyRedirectUrl() {
-    navigator.clipboard.writeText(`${origin}/r/${trackingId}`);
-    setCopyDone(true);
-    setTimeout(() => setCopyDone(false), 2000);
   }
 
   function downloadQr() {
@@ -155,18 +145,6 @@ export default function ManagePage() {
             </div>
             <p style={s.hint}>Use this code to search for this QR code in your dashboard.</p>
           </div>
-
-          {qr!.is_dynamic && (
-            <div style={s.section}>
-              <label style={s.sectionLabel}>Redirect link</label>
-              <div style={s.copyRow}>
-                <code style={s.codeBox}>{origin}/r/{trackingId}</code>
-                <button style={s.copyBtn} onClick={copyRedirectUrl}>
-                  {copyDone ? "Copied!" : "Copy"}
-                </button>
-              </div>
-            </div>
-          )}
 
           {qr!.is_dynamic && (
             <div style={s.section}>
