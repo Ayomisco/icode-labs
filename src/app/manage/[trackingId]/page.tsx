@@ -27,6 +27,7 @@ export default function ManagePage() {
   const [newDest, setNewDest] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [authUser, setAuthUser] = useState<{ email: string } | null | undefined>(undefined);
 
   useEffect(() => {
@@ -57,6 +58,7 @@ export default function ManagePage() {
   async function saveDestination() {
     if (!qr) return;
     setSaving(true);
+    setSaveError("");
     const res = await fetch(`/api/qr/${trackingId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -66,8 +68,15 @@ export default function ManagePage() {
     if (res.ok) {
       const updated = await res.json();
       setQr((prev) => prev ? { ...prev, ...updated } : prev);
+      // Regenerate QR image to reflect the new destination URL
+      QRCode.toDataURL(newDest || updated.payload, { width: 280, margin: 2, errorCorrectionLevel: "H" })
+        .then(setQrImage)
+        .catch(() => {});
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+    } else {
+      const body = await res.json().catch(() => ({}));
+      setSaveError(body.error ?? `Save failed (${res.status}). ${res.status === 403 ? "Sign in to edit this QR." : ""}`);
     }
     setSaving(false);
   }
@@ -158,6 +167,7 @@ export default function ManagePage() {
                 placeholder="https://your-new-link.com"
               />
               {saved && <p style={s.successHint}>✓ Destination updated successfully!</p>}
+              {saveError && <p style={{ fontSize: "13px", color: "#dc2626", margin: 0 }}>{saveError}</p>}
               <button style={s.saveBtn} onClick={saveDestination} disabled={saving || !newDest}>
                 {saving ? "Saving…" : "Update destination"}
               </button>
@@ -168,7 +178,7 @@ export default function ManagePage() {
             <div style={s.section}>
               <label style={s.sectionLabel}>Encoded content</label>
               <code style={{ ...s.codeBox, display: "block", wordBreak: "break-all", whiteSpace: "pre-wrap" }}>
-                {qr!.payload}
+                {qr!.destination_url || qr!.payload}
               </code>
             </div>
           )}

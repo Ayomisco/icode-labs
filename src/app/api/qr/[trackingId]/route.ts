@@ -46,7 +46,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
   if (body.destinationUrl !== undefined) {
     await sql`
-      UPDATE qr_codes SET destination_url = ${body.destinationUrl}, updated_at = NOW()
+      UPDATE qr_codes SET destination_url = ${body.destinationUrl}, payload = ${body.destinationUrl}, updated_at = NOW()
       WHERE tracking_id = ${id} AND is_dynamic = TRUE
     `;
   }
